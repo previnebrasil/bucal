@@ -24,7 +24,7 @@
         .app-container { display: flex; min-height: 100vh; }
         
         /* Sidebar */
-        .sidebar { width: 280px; background: rgba(15, 32, 39, 0.98); padding: 25px; border-right: 1px solid rgba(255,255,255,0.1); position: sticky; top: 0; height: 100vh; }
+        .sidebar { width: 280px; background: rgba(15, 32, 39, 0.98); padding: 25px; border-right: 1px solid rgba(255,255,255,0.1); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
         
         /* Conteúdo Principal */
         .main-content { flex: 1; padding: 40px; }
@@ -47,9 +47,40 @@
         }
         .logo-img { width: 80px; height: auto; margin-bottom: 5px; }
 
-        /* Legenda */
+        /* Legenda Interativa */
         .legend-box { padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }
-        .legend-item { display: flex; align-items: center; margin-bottom: 15px; font-size: 14px; font-weight: 600; }
+        
+        .legend-item { 
+            display: flex; 
+            align-items: center; 
+            margin-bottom: 15px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            cursor: pointer; /* Indica clicável */
+            transition: all 0.3s ease;
+            user-select: none;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .legend-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* Classe para item desativado */
+        .legend-item.inactive {
+            opacity: 0.3;
+            filter: grayscale(100%);
+        }
+
+        /* Classe para item fixo (não interativo) */
+        .legend-item.fixed {
+            cursor: default;
+        }
+        .legend-item.fixed:hover {
+            background: transparent;
+        }
+
         .dot { height: 20px; width: 20px; border-radius: 50%; display: inline-block; margin-right: 12px; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
         .dot-mista { background: linear-gradient(90deg, var(--color-infantil) 50%, var(--color-fundam) 50%); }
 
@@ -81,13 +112,34 @@
 
 <div class="app-container">
     <aside class="sidebar">
-        <h3 style="color: #00ffcc; margin-top: 0;">📍 Legenda</h3>
+        <h3 style="color: #00ffcc; margin-top: 0;">📍 Legenda Interativa</h3>
+        <p style="font-size: 12px; margin-bottom: 15px; opacity: 0.8;">Clique nos itens abaixo para filtrar as escolas.</p>
+        
         <div class="legend-box">
-            <div class="legend-item"><span class="dot" style="background: var(--color-saude); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">+</span> Saúde (UBS/USF)</div>
-            <div class="legend-item"><span class="dot" style="background: var(--color-infantil);"></span> Ed. Infantil</div>
-            <div class="legend-item"><span class="dot" style="background: var(--color-fundam);"></span> Ens. Fundamental</div>
-            <div class="legend-item"><span class="dot dot-mista"></span> Mista (Inf. + Fund.)</div>
-            <div class="legend-item"><span class="dot" style="background: var(--color-outros);"></span> Outros / Médio</div>
+            <div class="legend-item fixed">
+                <span class="dot" style="background: var(--color-saude); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">+</span> 
+                Saúde (UBS/USF)
+            </div>
+            
+            <div class="legend-item" onclick="toggleFilter('infantil', this)">
+                <span class="dot" style="background: var(--color-infantil);"></span> 
+                Ed. Infantil
+            </div>
+            
+            <div class="legend-item" onclick="toggleFilter('fundamental', this)">
+                <span class="dot" style="background: var(--color-fundam);"></span> 
+                Ens. Fundamental
+            </div>
+            
+            <div class="legend-item" onclick="toggleFilter('mista', this)">
+                <span class="dot dot-mista"></span> 
+                Mista (Inf. + Fund.)
+            </div>
+            
+            <div class="legend-item" onclick="toggleFilter('outros', this)">
+                <span class="dot" style="background: var(--color-outros);"></span> 
+                Outros / Médio
+            </div>
         </div>
         <p style="font-size: 12px; margin-top: 30px; opacity: 0.6;">Dica: Ao selecionar uma unidade no menu, o mapa focará automaticamente no local.</p>
     </aside>
@@ -125,6 +177,11 @@
 
 <script>
     const saudeMarkers = {};
+    const escolasLayers = []; // Armazena objetos { marker: L.Marker, tipo: string }
+    
+    // Estado inicial dos filtros (todos ativos)
+    const filtrosAtivos = new Set(['infantil', 'fundamental', 'mista', 'outros']);
+
     const map = L.map('map').setView([-22.2139, -49.9458], 13);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
@@ -156,13 +213,23 @@
         }
     }
 
-    function getMarkerStyle(etapa) {
-        if (!etapa) return '#FF00FF';
+    // Helper para determinar a categoria padronizada e a cor
+    function analisarCategoria(etapa) {
+        if (!etapa) return { tipo: 'outros', color: '#FF00FF', style: '#FF00FF' };
+        
         const e = etapa.toUpperCase();
-        if (e.includes('INFANTIL') && e.includes('FUNDAMENTAL')) return 'linear-gradient(90deg, #00FF00 50%, #00D9FF 50%)';
-        if (e.includes('INFANTIL')) return '#00FF00';
-        if (e.includes('FUNDAMENTAL')) return '#00D9FF';
-        return '#FF00FF';
+        
+        if (e.includes('INFANTIL') && e.includes('FUNDAMENTAL')) {
+            return { tipo: 'mista', color: 'mista', style: 'linear-gradient(90deg, #00FF00 50%, #00D9FF 50%)' };
+        }
+        if (e.includes('INFANTIL')) {
+            return { tipo: 'infantil', color: '#00FF00', style: '#00FF00' };
+        }
+        if (e.includes('FUNDAMENTAL')) {
+            return { tipo: 'fundamental', color: '#00D9FF', style: '#00D9FF' };
+        }
+        
+        return { tipo: 'outros', color: '#FF00FF', style: '#FF00FF' };
     }
 
     async function init() {
@@ -174,6 +241,7 @@
 
         const select = document.getElementById('unidade-select');
 
+        // --- UNIDADES DE SAÚDE (FIXAS) ---
         dadosSaude.forEach((u, index) => {
             const lat = fixCoord(u.latitude);
             const lon = fixCoord(u.longitude);
@@ -196,21 +264,61 @@
             }
         });
 
+        // --- ESCOLAS (FILTRÁVEIS) ---
         dadosEscolas.forEach(e => {
             const lat = fixCoord(e.Latitude);
             const lon = fixCoord(e.Longitude);
             if (lat && lon) {
-                const etapa = e['Etapas e Modalidade de Ensino Oferecidas'] || '';
-                const style = getMarkerStyle(etapa);
+                const etapaNome = e['Etapas e Modalidade de Ensino Oferecidas'] || '';
+                const info = analisarCategoria(etapaNome);
+                
                 const icon = L.divIcon({
-                    html: `<div style="background:${style}; width:20px; height:20px; border-radius:50%; border:2px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`,
+                    html: `<div style="background:${info.style}; width:20px; height:20px; border-radius:50%; border:2px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.4);"></div>`,
                     className: '', iconSize: [20, 20]
                 });
-                L.marker([lat, lon], {icon: icon}).bindPopup(`<div style="color:#333"><b>${e.Escola}</b><br><small>${etapa}</small></div>`).addTo(map);
+                
+                const marker = L.marker([lat, lon], {icon: icon})
+                                .bindPopup(`<div style="color:#333"><b>${e.Escola}</b><br><small>${etapaNome}</small></div>`);
+                
+                // Adiciona ao mapa inicialmente
+                marker.addTo(map);
+
+                // Salva referência para filtrar depois
+                escolasLayers.push({
+                    marker: marker,
+                    tipo: info.tipo
+                });
             }
         });
 
         document.getElementById('loading').style.display = 'none';
+    }
+
+    // --- FUNÇÃO DE FILTRO ---
+    function toggleFilter(tipo, elementoHtml) {
+        // 1. Atualiza o Set de filtros ativos
+        if (filtrosAtivos.has(tipo)) {
+            filtrosAtivos.delete(tipo);
+            elementoHtml.classList.add('inactive'); // Visualmente desligado
+        } else {
+            filtrosAtivos.add(tipo);
+            elementoHtml.classList.remove('inactive'); // Visualmente ligado
+        }
+
+        // 2. Atualiza os marcadores no mapa
+        escolasLayers.forEach(item => {
+            if (filtrosAtivos.has(item.tipo)) {
+                // Se o tipo está ativo, garante que está no mapa
+                if (!map.hasLayer(item.marker)) {
+                    item.marker.addTo(map);
+                }
+            } else {
+                // Se o tipo está inativo, remove do mapa
+                if (map.hasLayer(item.marker)) {
+                    item.marker.remove();
+                }
+            }
+        });
     }
 
     function focarUnidade() {
@@ -222,13 +330,8 @@
             const marker = saudeMarkers[index];
             if (marker) {
                 const coords = marker.getLatLng();
-                
                 map.setView(coords, 17);
-                
-                setTimeout(() => {
-                    marker.openPopup();
-                }, 300);
-
+                setTimeout(() => { marker.openPopup(); }, 300);
                 document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
@@ -238,4 +341,3 @@
 </script>
 </body>
 </html>
-
