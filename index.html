@@ -448,14 +448,19 @@
 
         // Filtrar apenas escolas que tem Fundamental
         const escolasFund = dadosEscolas.filter(e => {
-            const etapa = (e['Etapas e Modalidade de Ensino Oferecidas'] || '').toLowerCase();
-            return etapa.includes('fundamental');
-        });
+    const etapa = (e['Etapas e Modalidade de Ensino Oferecidas'] || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
 
-        if (escolasFund.length === 0) {
-            alert("Nenhuma escola de Ensino Fundamental encontrada nos dados.");
-            return;
-        }
+    const categoria = (e['Categoria Administrativa'] || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    return etapa.includes('fundamental') && categoria === 'publica';
+});
 
         dadosUnidades.forEach(u => {
             const uLat = fixCoord(u.latitude || u.Latitude);
